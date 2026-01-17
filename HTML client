@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Eden — еда, которая тебя понимает</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root{--mint:#a8e6cf;--cream:#fff8f3;--white:#ffffff;--text:#2e2e2e;--accent:#ff6b6b}
+    *{box-sizing:border-box;font-family:Inter,sans-serif}
+    body{margin:0;background:var(--cream);color:var(--text);animation:fadeIn 1s}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+    header{background:var(--mint);padding:2rem 1rem;text-align:center;border-radius:0 0 24px 24px}
+    header input{padding:.7rem 1.2rem;border:none;border-radius:12px;width:100%;max-width:400px;margin-top:1rem;font-size:1rem}
+    .categories{display:flex;flex-wrap:wrap;gap:.8rem;padding:1rem}
+    .category{background:var(--white);border:2px solid transparent;border-radius:16px;padding:.6rem 1.2rem;cursor:pointer;transition:all .3s}
+    .category:hover{border-color:var(--mint);transform:translateY(-3px)}
+    .menu{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1.2rem;padding:1rem}
+    .dish-card{background:var(--white);border-radius:20px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,.06);transition:transform .3s,box-shadow .3s;cursor:pointer}
+    .dish-card:hover{transform:translateY(-6px);box-shadow:0 8px 20px rgba(0,0,0,.08)}
+    .dish-card img{width:100%;height:160px;object-fit:cover}
+    .dish-info{padding:1rem}
+    .dish-info h3{margin:0 0 .4rem;font-weight:600}
+    .dish-info span{color:var(--accent);font-size:1.1rem}
+    .cart{position:fixed;bottom:0;right:0;background:var(--white);border-radius:24px 0 0 0;box-shadow:0 -4px 16px rgba(0,0,0,.08);width:300px;max-height:50vh;display:flex;flex-direction:column;padding:1rem}
+    .cart ul{list-style:none;padding:0;margin:0;overflow:auto}
+    .cart li{display:flex;justify-content:space-between;margin-bottom:.5rem}
+    .modal{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;padding:1rem;animation:fadeIn .3s}
+    .modal-content{background:var(--white);border-radius:24px;max-width:420px;width:100%;padding:2rem;position:relative}
+    .modal-content img{width:100%;border-radius:16px}
+    .close{position:absolute;top:1rem;right:1.2rem;font-size:1.5rem;cursor:pointer}
+    .hidden{display:none}button{background:var(--mint);border:none;padding:.7rem 1.2rem;border-radius:12px;font-weight:600;cursor:pointer;transition:background .3s}button:hover{background:#8ed9b7}
+  </style>
+</head>
+<body>
+<header>
+  <h1>Eden 🌿</h1>
+  <p>Еда, которая тебя понимает</p>
+  <input id="search" placeholder="Поиск по названию...">
+</header>
+<section class="categories">
+  <button class="category" onclick="filterCat('all')">Все</button>
+  <button class="category" onclick="filterCat('healthy')">🥗 Здоровое</button>
+  <button class="category" onclick="filterCat('spicy')">🌶️ Острое</button>
+  <button class="category" onclick="filterCat('sushi')">🍣 Суши</button>
+  <button class="category" onclick="filterCat('pasta')">🍝 Паста</button>
+  <button class="category" onclick="filterCat('vegan')">🌱 Веган</button>
+</section>
+<main class="menu" id="menu"></main>
+<div class="cart">
+  <h3>Корзина (<span id="count">0</span>)</h3>
+  <ul id="cart-list"></ul>
+  <strong>Итого: <span id="total">0</span>₽</strong>
+  <button onclick="showCheckout()">Оформить заказ</button>
+</div>
+
+<!-- модалка блюда -->
+<div id="modal" class="modal hidden">
+  <div class="modal-content">
+    <span class="close" onclick="closeModal()">&times;</span>
+    <img id="modal-img" src="" alt="">
+    <h2 id="modal-name"></h2>
+    <p id="modal-desc"></p>
+    <p><strong>Калории:</strong> <span id="modal-kcal"></span> ккал</p>
+    <p><strong>Состав:</strong> <span id="modal-ingr"></span></p>
+    <button onclick="addFromModal()">Добавить в корзину</button>
+  </div>
+</div>
+
+<!-- оформление -->
+<div id="checkout" class="modal hidden">
+  <div class="modal-content">
+    <span class="close" onclick="closeCheckout()">&times;</span>
+    <h2>Оформление заказа</h2>
+    <input id="name" placeholder="Имя"><br><br>
+    <input id="phone" placeholder="Телефон"><br><br>
+    <input id="address" placeholder="Адрес доставки"><br><br>
+    <button onclick="submitOrder()">Заказать</button>
+  </div>
+</div>
+
+<script>
+  let menu = [];
+  let cart = JSON.parse(localStorage.getItem('edenCart')) || [];
+  let currentDish = null;
+
+  async function loadDishes() {
+    const res = await fetch('/api/dishes');
+    menu = await res.json();
+    renderMenu();
+  }
+  loadDishes();
+
+  function renderMenu(list = menu) {
+    const container = document.getElementById('menu');
+    container.innerHTML = '';
+    list.forEach(item => {
+      const card = document.createElement('div');
+      card.className = 'dish-card';
+      card.innerHTML = `
+        <img src="${item.img}" alt="">
+        <div class="dish-info">
+          <h3>${item.name}</h3>
+          <span>${item.price}₽</span>
+        </div>
+      `;
+      card.onclick = () => showModal(item);
+      container.appendChild(card);
+    });
+  }
+
+  function filterCat(cat) {
+    if (cat === 'all') return renderMenu();
+    const filtered = menu.filter(i => i.cat === cat || (Array.isArray(i.cat) && i.cat.includes(cat)));
+    renderMenu(filtered);
+  }
+
+  document.getElementById('search').addEventListener('input', e => {
+    const val = e.target.value.toLowerCase();
+    const filtered = menu.filter(i => i.name.toLowerCase().includes(val));
+    renderMenu(filtered);
+  });
+
+  function showModal(item) {
+    currentDish = item;
+    document.getElementById('modal-img').src = item.img;
+    document.getElementById('modal-name').textContent = item.name;
+    document.getElementById('modal-desc').textContent = item.desc;
+    document.getElementById('modal-kcal').textContent = item.kcal;
+    document.getElementById('modal-ingr').textContent = item.ingr;
+    document.getElementById('modal').classList.remove('hidden');
+  }
+
+  function closeModal() {
+    document.getElementById('modal').classList.add('hidden');
+  }
+
+  function addFromModal() {
+    if (currentDish) {
+      cart.push(currentDish);
+      localStorage.setItem('edenCart', JSON.stringify(cart));
+      updateCart();
+      closeModal();
+    }
+  }
+
+  function updateCart() {
+    const list = document.getElementById('cart-list');
+    const count = document.getElementById('count');
+    const total = document.getElementById('total');
+    list.innerHTML = '';
+    let sum = 0;
+    cart.forEach((item, idx) => {
+      sum += item.price;
+      const li = document.createElement('li');
+      li.innerHTML = `${item.name} - ${item.price}₽ <button onclick="removeItem(${idx})">×</button>`;
+      list.appendChild(li);
+    });
+    count.textContent = cart.length;
+    total.textContent = sum;
+  }
+
+  function removeItem(idx) {
+    cart.splice(idx, 1);
+    localStorage.setItem('edenCart', JSON.stringify(cart));
+    updateCart();
+  }
+
+  function showCheckout() {
+    document.getElementById('checkout').classList.remove('hidden');
+  }
+
+  function closeCheckout() {
+    document.getElementById('checkout').classList.add('hidden');
+  }
+
+  function submitOrder() {
+    const name = document.getElementById('name').value.trim();
+    const phone = document.getElementById('phone').value.trim();
+    const address = document.getElementById('address').value.trim();
+    if (!name || !phone || !address) return alert('Заполни все поля');
+    alert(`Спасибо, ${name}! Заказ принят.\nМы позвоним на ${phone}`);
+    cart = [];
+    localStorage.removeItem('edenCart');
+    updateCart();
+    closeCheckout();
+  }
+
+  updateCart();
+</script>
+</body>
+</html>
