@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Eden Admin</title>
+  <style>
+    body{font-family:Inter,sans-serif;background:#f4fbf7;padding:2rem}
+    form{display:flex;flex-direction:column;gap:1rem;max-width:400px}
+    input,select,textarea{padding:.7rem;border:1px solid #ccc;border-radius:8px}
+    #drop{border:2px dashed #a8e6cf;border-radius:16px;padding:2rem;text-align:center;cursor:pointer}
+    #drop img{width:100%;border-radius:12px;margin-top:1rem}
+    button{background:#a8e6cf;border:none;padding:.8rem;border-radius:12px;font-weight:600;cursor:pointer}
+    .list{display:grid;grid-template-columns:repeat(auto-fill,140px);gap:1rem;margin-top:2rem}
+    .item{background:#fff;border-radius:12px;padding:.5rem;text-align:center;position:relative}
+    .item img{width:100%;height:100px;object-fit:cover;border-radius:8px}
+    .item button{position:absolute;top:4px;right:4px;background:#ff6b6b;color:#fff;border:none;border-radius:50%;width:24px;height:24px;cursor:pointer}
+  </style>
+</head>
+<body>
+  <h2>Добавить блюдо</h2>
+  <form id="form">
+    <input name="name" placeholder="Название" required>
+    <input name="price" type="number" placeholder="Цена" required>
+    <input name="kcal" type="number" placeholder="Калории" required>
+    <input name="ingr" placeholder="Состав" required>
+    <textarea name="desc" placeholder="Описание" required></textarea>
+    <select name="cat" required>
+      <option value="healthy">🥗 Здоровое</option>
+      <option value="spicy">🌶️ Острое</option>
+      <option value="sushi">🍣 Суши</option>
+      <option value="pasta">🍝 Паста</option>
+      <option value="vegan">🌱 Веган</option>
+    </select>
+    <div id="drop">Перетащи фото сюда<br><input type="file" accept="image/*" hidden name="img"></div>
+    <button>Загрузить</button>
+  </form>
+
+  <h2>Существующие</h2>
+  <div class="list" id="list"></div>
+
+  <script>
+    const drop = document.getElementById('drop');
+    const fileInput = drop.querySelector('input');
+    let file = null;
+
+    drop.onclick = () => fileInput.click();
+    fileInput.onchange = e => { file = e.target.files[0]; preview(file); };
+    drop.ondragover = e => e.preventDefault();
+    drop.ondrop = e => { e.preventDefault(); file = e.dataTransfer.files[0]; fileInput.files = e.dataTransfer.files; preview(file); };
+
+    function preview(f) {
+      const img = new Image();
+      img.src = URL.createObjectURL(f);
+      drop.appendChild(img);
+    }
+
+    document.getElementById('form').onsubmit = async (e) => {
+      e.preventDefault();
+      if (!file) return alert('Добавь фото');
+      const form = new FormData(e.target);
+      form.set('img', file);
+      await fetch('/api/dishes', { method: 'POST', body: form });
+      e.target.reset();
+      drop.querySelector('img')?.remove();
+      file = null;
+      load();
+    };
+
+    async function load() {
+      const res = await fetch('/api/dishes');
+      const dishes = await res.json();
+      const list = document.getElementById('list');
+      list.innerHTML = dishes.map(d => `
+        <div class="item">
+          <img src="${d.img}" alt="">
+          <div>${d.name}</div>
+          <button onclick="del(${d.id})">×</button>
+        </div>
+      `).join('');
+    }
+    async function del(id) {
+      await fetch('/api/dishes/' + id, { method: 'DELETE' });
+      load();
+    }
+    load();
+  </script>
+</body>
+</html>
